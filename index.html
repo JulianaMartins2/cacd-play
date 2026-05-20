@@ -128,10 +128,11 @@
   /* ESTATISTICAS */
   .stats-filters { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
   .chart-bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
-  .chart-bar-label { font-size: 13px; color: var(--muted); min-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .chart-bar-track { flex: 1; background: var(--bg3); border-radius: 4px; height: 20px; overflow: hidden; }
+  .chart-bar-label { font-size: 13px; color: var(--muted); min-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chart-bar-track { flex: 1; background: var(--bg3); border-radius: 4px; height: 22px; overflow: hidden; }
   .chart-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; display: flex; align-items: center; padding-left: 8px; font-size: 11px; font-weight: 700; color: #0a0a0a; }
-  .chart-bar-pct { font-size: 13px; color: var(--muted); min-width: 36px; text-align: right; font-family: 'IBM Plex Mono', monospace; }
+  .chart-bar-pct { font-size: 13px; color: var(--muted); min-width: 56px; text-align: right; font-family: 'IBM Plex Mono', monospace; }
+  .chart-bar-qty { font-size: 11px; color: var(--muted2); min-width: 40px; text-align: right; }
   .meta-input { width: 80px; background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 16px; padding: 6px 10px; border-radius: 8px; outline: none; text-align: center; }
   .meta-input:focus { border-color: var(--green); }
 
@@ -313,21 +314,36 @@
       <option value="">Todos os anos</option>
     </select>
   </div>
+
+  <!-- Cards resumo -->
   <div class="stats-grid" id="est-cards"></div>
-  <div style="margin-top:32px">
-    <div class="section-title" style="margin-bottom:16px">Desempenho por matéria</div>
-    <div id="est-barras"></div>
+
+  <!-- Meta -->
+  <div style="margin-top:28px;background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <div style="font-size:13px;color:var(--muted)">🎯 Meta de aproveitamento:</div>
+    <input type="number" class="meta-input" id="meta-input" value="70" min="0" max="100">
+    <div style="font-size:13px;color:var(--muted)">%</div>
+    <span id="meta-status" style="font-size:13px"></span>
   </div>
+
+  <!-- Desempenho por matéria -->
   <div style="margin-top:32px">
-    <div class="section-title" style="margin-bottom:16px">Meta de aproveitamento</div>
-    <div style="display:flex;align-items:center;gap:12px;color:var(--muted);font-size:14px">
-      Meta: <input type="number" class="meta-input" id="meta-input" value="70" min="0" max="100"> %
-      <span id="meta-status" style="font-size:13px"></span>
-    </div>
+    <div class="section-title" style="margin-bottom:16px">📊 Desempenho por matéria</div>
+    <div id="est-barras-materia"></div>
   </div>
+
+  <!-- Sub-matérias mais cobradas -->
   <div style="margin-top:32px">
-    <div class="section-title" style="margin-bottom:16px">Questões mais erradas</div>
-    <div id="est-erros"></div>
+    <div class="section-title" style="margin-bottom:6px">📌 Sub-matérias mais cobradas nas provas</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Com base nas questões cadastradas no banco</div>
+    <div id="est-submateria-cobradas"></div>
+  </div>
+
+  <!-- Temas que mais erra -->
+  <div style="margin-top:32px">
+    <div class="section-title" style="margin-bottom:6px">🔴 Onde você mais erra</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px">Por matéria e sub-matéria — quantidade e percentual de erro</div>
+    <div id="est-erros-materia"></div>
   </div>
 </div>
 
@@ -694,70 +710,140 @@ function renderRevisao() {
   `).join('');
 }
 
+// CORES POR MATÉRIA
+const MATERIA_CORES = {
+  'Português':             '#4fc3f7',
+  'História Mundial':      '#ce93d8',
+  'História do Brasil':    '#f48fb1',
+  'Geografia':             '#80cbc4',
+  'Direito':               '#ffe082',
+  'Inglês':                '#a5d6a7',
+  'Espanhol':              '#ffab91',
+  'Economia':              '#90caf9',
+  'Política Internacional':'#bcaaa4',
+};
+function corMateria(m) { return MATERIA_CORES[m] || '#888'; }
+
 // ESTATÍSTICAS
 function renderEstatisticas() {
   const mat = document.getElementById('est-materia')?.value || '';
   const ano = document.getElementById('est-ano')?.value || '';
-  let pool = [...respostas];
   let qpool = [...questoes];
-  if (mat) { qpool = qpool.filter(q => q.materia === mat); pool = pool.filter(r => qpool.find(q => q.id === r.questao_id)); }
-  if (ano) { const ids = questoes.filter(q => String(q.ano) === ano).map(q => q.id); pool = pool.filter(r => ids.includes(r.questao_id)); }
+  if (mat) qpool = qpool.filter(q => q.materia === mat);
+  if (ano) qpool = qpool.filter(q => String(q.ano) === ano);
+  const qIds = new Set(qpool.map(q => q.id));
+  let pool = respostas.filter(r => qIds.has(r.questao_id));
 
   const total = pool.length;
   const acertos = pool.filter(r => r.acertou).length;
   const erros = total - acertos;
   const pct = total ? Math.round((acertos/total)*100) : 0;
+  const meta = parseInt(document.getElementById('meta-input')?.value || 70);
 
+  // Cards
   document.getElementById('est-cards').innerHTML = `
     <div class="stat-card"><div class="stat-label">Respondidas</div><div class="stat-value">${total}</div></div>
     <div class="stat-card"><div class="stat-label">Acertos</div><div class="stat-value green">${acertos}</div></div>
     <div class="stat-card"><div class="stat-label">Erros</div><div class="stat-value red">${erros}</div></div>
-    <div class="stat-card"><div class="stat-label">Aproveitamento</div><div class="stat-value" style="color:${pct>=70?'var(--green)':'var(--red)'}">${pct}%</div></div>
+    <div class="stat-card"><div class="stat-label">Aproveitamento</div><div class="stat-value" style="color:${pct>=meta?'var(--green)':'var(--red)'}">${total?pct+'%':'—'}</div></div>
   `;
 
-  // Barras por matéria
-  const materias = [...new Set(questoes.map(q => q.materia))];
-  const barras = materias.map(m => {
-    const ids = questoes.filter(q => q.materia === m).map(q => q.id);
+  // Meta status
+  const metaStatus = document.getElementById('meta-status');
+  if (metaStatus) {
+    if (!total) { metaStatus.textContent = ''; }
+    else if (pct >= meta) { metaStatus.textContent = `✅ Meta atingida (${pct}% ≥ ${meta}%)`; metaStatus.style.color = 'var(--green)'; }
+    else { metaStatus.textContent = `⚠️ Abaixo da meta (${pct}% < ${meta}%)`; metaStatus.style.color = 'var(--red)'; }
+  }
+
+  // Barras por matéria com cores
+  const materias = [...new Set(qpool.map(q => q.materia))];
+  const barrasMateria = materias.map(m => {
+    const ids = qpool.filter(q => q.materia === m).map(q => q.id);
     const rs = pool.filter(r => ids.includes(r.questao_id));
     const ac = rs.filter(r => r.acertou).length;
     const p = rs.length ? Math.round((ac/rs.length)*100) : null;
-    return { m, p, n: rs.length };
+    return { m, p, n: rs.length, erros: rs.length - ac };
   }).filter(x => x.n > 0).sort((a,b) => b.p - a.p);
 
-  document.getElementById('est-barras').innerHTML = barras.length ? barras.map(b => `
+  document.getElementById('est-barras-materia').innerHTML = barrasMateria.length ? barrasMateria.map(b => `
     <div class="chart-bar-row">
-      <div class="chart-bar-label">${b.m}</div>
+      <div class="chart-bar-label" style="color:${corMateria(b.m)}">${b.m}</div>
       <div class="chart-bar-track">
-        <div class="chart-bar-fill" style="width:${b.p}%;background:${b.p>=70?'var(--green)':'var(--red)'}">
-          ${b.p > 15 ? b.p + '%' : ''}
+        <div class="chart-bar-fill" style="width:${b.p}%;background:${corMateria(b.m)}">
+          ${b.p > 12 ? b.p + '%' : ''}
         </div>
       </div>
-      <div class="chart-bar-pct">${b.p}%</div>
+      <div class="chart-bar-pct" style="color:${corMateria(b.m)}">${b.p}%</div>
+      <div class="chart-bar-qty">${b.n} questões</div>
     </div>
-  `).join('') : '<div style="color:var(--muted);font-size:14px">Sem dados ainda.</div>';
+  `).join('') : '<div style="color:var(--muted);font-size:14px">Sem dados ainda. Faça simulados para ver seu desempenho.</div>';
 
-  // Meta
-  const meta = parseInt(document.getElementById('meta-input')?.value || 70);
-  const metaStatus = document.getElementById('meta-status');
-  if (metaStatus && total > 0) {
-    metaStatus.textContent = pct >= meta ? `✅ Meta atingida (${pct}% ≥ ${meta}%)` : `⚠️ Abaixo da meta (${pct}% < ${meta}%)`;
-    metaStatus.style.color = pct >= meta ? 'var(--green)' : 'var(--red)';
-  }
-
-  // Questões mais erradas
-  const errosPorQ = {};
-  respostas.filter(r => !r.acertou).forEach(r => { errosPorQ[r.questao_id] = (errosPorQ[r.questao_id]||0)+1; });
-  const topErros = Object.entries(errosPorQ).sort((a,b)=>b[1]-a[1]).slice(0,5);
-  document.getElementById('est-erros').innerHTML = topErros.length ? topErros.map(([id, n]) => {
-    const q = questoes.find(x => x.id === id);
-    if (!q) return '';
-    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:8px">
-      <div class="question-meta" style="margin-bottom:6px"><span class="tag tag-materia">${q.materia}</span><span class="tag tag-ano">${q.ano}</span></div>
-      <div style="font-size:14px;line-height:1.5">${q.enunciado}</div>
-      <div style="font-size:12px;color:var(--red);margin-top:6px">Errada ${n}× — Gabarito: ${q.gabarito}</div>
+  // Sub-matérias mais cobradas (baseado no banco de questões)
+  const subCount = {};
+  qpool.forEach(q => {
+    if (!q.submateria) return;
+    const key = `${q.materia}|||${q.submateria}`;
+    subCount[key] = (subCount[key] || 0) + 1;
+  });
+  const topSubs = Object.entries(subCount).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  const maxSub = topSubs[0]?.[1] || 1;
+  document.getElementById('est-submateria-cobradas').innerHTML = topSubs.length ? topSubs.map(([key, n]) => {
+    const [m, s] = key.split('|||');
+    const pct = Math.round((n/maxSub)*100);
+    return `<div class="chart-bar-row">
+      <div class="chart-bar-label" title="${m} · ${s}" style="color:${corMateria(m)}">${s}</div>
+      <div class="chart-bar-track">
+        <div class="chart-bar-fill" style="width:${pct}%;background:${corMateria(m)}">
+          ${pct > 12 ? n + ' questões' : ''}
+        </div>
+      </div>
+      <div class="chart-bar-pct" style="color:${corMateria(m)}">${n}q</div>
+      <div class="chart-bar-qty" style="color:${corMateria(m)};font-size:11px">${m}</div>
     </div>`;
-  }).join('') : '<div style="color:var(--muted);font-size:14px">Nenhum erro registrado ainda.</div>';
+  }).join('') : '<div style="color:var(--muted);font-size:14px">Nenhuma sub-matéria cadastrada ainda.</div>';
+
+  // Onde mais erra — por matéria e sub-matéria
+  const errosPorChave = {};
+  const totalPorChave = {};
+  pool.forEach(r => {
+    const q = questoes.find(x => x.id === r.questao_id);
+    if (!q) return;
+    const keyM = `M|||${q.materia}`;
+    totalPorChave[keyM] = (totalPorChave[keyM]||0)+1;
+    if (!r.acertou) errosPorChave[keyM] = (errosPorChave[keyM]||0)+1;
+    if (q.submateria) {
+      const keyS = `S|||${q.materia}|||${q.submateria}`;
+      totalPorChave[keyS] = (totalPorChave[keyS]||0)+1;
+      if (!r.acertou) errosPorChave[keyS] = (errosPorChave[keyS]||0)+1;
+    }
+  });
+  const errosLista = Object.entries(errosPorChave)
+    .map(([key, n]) => ({ key, n, total: totalPorChave[key], pct: Math.round((n/totalPorChave[key])*100) }))
+    .filter(x => x.n > 0)
+    .sort((a,b) => b.pct - a.pct || b.n - a.n)
+    .slice(0, 10);
+
+  document.getElementById('est-erros-materia').innerHTML = errosLista.length ? errosLista.map(x => {
+    const parts = x.key.split('|||');
+    const tipo = parts[0];
+    const m = parts[1];
+    const s = parts[2] || null;
+    const label = s ? `${s}` : `${m}`;
+    const sublabel = s ? m : null;
+    return `<div class="chart-bar-row">
+      <div class="chart-bar-label" style="color:${corMateria(m)}" title="${label}">
+        ${label}${sublabel ? `<br><span style="font-size:10px;color:var(--muted)">${sublabel}</span>` : ''}
+      </div>
+      <div class="chart-bar-track">
+        <div class="chart-bar-fill" style="width:${x.pct}%;background:${corMateria(m)}">
+          ${x.pct > 12 ? x.pct+'%' : ''}
+        </div>
+      </div>
+      <div class="chart-bar-pct" style="color:var(--red)">${x.pct}%</div>
+      <div class="chart-bar-qty">${x.n} erros</div>
+    </div>`;
+  }).join('') : '<div style="color:var(--muted);font-size:14px">Nenhum erro registrado ainda. Continue fazendo simulados!</div>';
 }
 
 document.getElementById('meta-input')?.addEventListener('input', renderEstatisticas);
