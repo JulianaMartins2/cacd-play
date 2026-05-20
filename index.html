@@ -278,6 +278,11 @@
     <select class="form-select" id="sim-ano" style="width:auto" onchange="carregarSimulado()">
       <option value="">Todos os anos</option>
     </select>
+    <select class="form-select" id="sim-vistas" style="width:auto" onchange="carregarSimulado()">
+      <option value="">Todas as questões</option>
+      <option value="novas">Nunca respondidas</option>
+      <option value="vistas">Já respondidas</option>
+    </select>
     <button class="btn-secondary" onclick="carregarSimulado()" style="padding:8px 16px;font-size:13px">↺ Recarregar</button>
   </div>
   <div id="simulado-area"></div>
@@ -575,9 +580,13 @@ function cancelarEdicao() { fecharModal(); }
 function carregarSimulado() {
   const mat = document.getElementById('sim-materia').value;
   const ano = document.getElementById('sim-ano').value;
+  const vistas = document.getElementById('sim-vistas').value;
+  const idsRespondidas = new Set(respostas.map(r => r.questao_id));
   let pool = [...questoes];
   if (mat) pool = pool.filter(q => q.materia === mat);
   if (ano) pool = pool.filter(q => String(q.ano) === ano);
+  if (vistas === 'novas') pool = pool.filter(q => !idsRespondidas.has(q.id));
+  if (vistas === 'vistas') pool = pool.filter(q => idsRespondidas.has(q.id));
   simuladoQuestoes = pool.sort(() => Math.random() - 0.5);
   simIdx = 0; simRespondida = false;
   renderSimulado();
