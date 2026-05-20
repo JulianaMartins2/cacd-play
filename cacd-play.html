@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CACD.play</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --bg2: #111111;
+    --bg3: #1a1a1a;
+    --border: #222;
+    --border2: #333;
+    --green: #c8f135;
+    --green2: #a8d420;
+    --text: #f0f0f0;
+    --muted: #666;
+    --muted2: #444;
+    --red: #ff4444;
+    --yellow: #ffd700;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Space Grotesk', sans-serif; min-height: 100vh; }
+  
+  /* NAV */
+  nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; height: 56px; gap: 8px; position: sticky; top: 0; z-index: 100; }
+  .logo { font-weight: 700; font-size: 18px; color: var(--green); margin-right: 16px; letter-spacing: -0.5px; }
+  .logo span { color: var(--text); }
+  .nav-btn { background: none; border: none; color: var(--muted); font-family: inherit; font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+  .nav-btn:hover { color: var(--text); background: var(--bg3); }
+  .nav-btn.active { color: var(--green); background: rgba(200,241,53,0.08); }
+  .nav-spacer { flex: 1; }
+  .streak { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+  .streak-num { color: var(--yellow); font-weight: 700; }
+
+  /* PAGES */
+  .page { display: none; padding: 32px 24px; max-width: 900px; margin: 0 auto; }
+  .page.active { display: block; }
+
+  /* HERO */
+  .hero { padding: 48px 0 32px; }
+  .hero h1 { font-size: 42px; font-weight: 700; line-height: 1.1; letter-spacing: -1px; }
+  .hero h1 span { color: var(--green); }
+  .hero p { color: var(--muted); margin-top: 12px; font-size: 15px; }
+  .hero-btns { display: flex; gap: 12px; margin-top: 28px; }
+  .btn-primary { background: var(--green); color: #0a0a0a; border: none; padding: 12px 24px; border-radius: 10px; font-family: inherit; font-weight: 700; font-size: 15px; cursor: pointer; transition: all 0.15s; }
+  .btn-primary:hover { background: var(--green2); transform: translateY(-1px); }
+  .btn-secondary { background: none; color: var(--text); border: 1px solid var(--border2); padding: 12px 24px; border-radius: 10px; font-family: inherit; font-weight: 500; font-size: 15px; cursor: pointer; transition: all 0.15s; }
+  .btn-secondary:hover { border-color: var(--green); color: var(--green); }
+  
+  /* STATS GRID */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 32px; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-value { font-size: 32px; font-weight: 700; margin-top: 6px; font-family: 'IBM Plex Mono', monospace; }
+  .stat-value.green { color: var(--green); }
+  .stat-value.red { color: var(--red); }
+
+  /* SECTION HEADER */
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; margin-top: 40px; }
+  .section-title { font-size: 18px; font-weight: 600; }
+
+  /* FORM */
+  .form-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 28px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 13px; color: var(--muted); margin-bottom: 8px; display: block; font-weight: 500; }
+  .form-label .optional { color: var(--muted2); font-size: 11px; }
+  .form-input, .form-select, .form-textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: inherit; font-size: 14px; padding: 10px 14px; border-radius: 8px; outline: none; transition: border 0.15s; }
+  .form-input:focus, .form-select:focus, .form-textarea:focus { border-color: var(--green); }
+  .form-select { appearance: none; cursor: pointer; }
+  .form-textarea { resize: vertical; min-height: 90px; }
+  .gabarito-row { display: flex; gap: 12px; }
+  .radio-card { flex: 1; border: 1px solid var(--border); border-radius: 10px; padding: 14px; cursor: pointer; transition: all 0.15s; text-align: center; font-weight: 600; font-size: 15px; }
+  .radio-card:hover { border-color: var(--border2); }
+  .radio-card.certo { border-color: transparent; }
+  .radio-card.certo.selected { background: rgba(200,241,53,0.12); border-color: var(--green); color: var(--green); }
+  .radio-card.errado.selected { background: rgba(255,68,68,0.12); border-color: var(--red); color: var(--red); }
+  .form-actions { display: flex; gap: 12px; margin-top: 20px; }
+
+  /* QUESTIONS LIST */
+  .questions-list { display: flex; flex-direction: column; gap: 10px; }
+  .question-item { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px; transition: border 0.15s; }
+  .question-item:hover { border-color: var(--border2); }
+  .question-num { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--muted); min-width: 28px; margin-top: 2px; }
+  .question-content { flex: 1; }
+  .question-meta { display: flex; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 500; }
+  .tag-materia { background: rgba(200,241,53,0.1); color: var(--green); }
+  .tag-ano { background: var(--bg3); color: var(--muted); border: 1px solid var(--border); }
+  .tag-sub { background: rgba(100,100,255,0.1); color: #8888ff; }
+  .question-text { font-size: 14px; line-height: 1.5; color: var(--text); }
+  .question-apoio { font-size: 12px; color: var(--muted); margin-top: 4px; cursor: pointer; }
+  .apoio-text { font-size: 13px; color: #aaa; background: var(--bg3); border-left: 2px solid var(--border2); padding: 10px 14px; border-radius: 4px; margin-top: 8px; line-height: 1.6; display: none; }
+  .apoio-text.visible { display: block; }
+  .question-actions { display: flex; gap: 8px; }
+  .icon-btn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 18px; padding: 4px; border-radius: 6px; transition: all 0.15s; }
+  .icon-btn:hover { color: var(--text); background: var(--bg3); }
+  .gabarito-badge { font-size: 11px; padding: 3px 8px; border-radius: 6px; font-weight: 700; margin-top: 6px; display: inline-block; }
+  .badge-certo { background: rgba(200,241,53,0.1); color: var(--green); }
+  .badge-errado { background: rgba(255,68,68,0.1); color: var(--red); }
+
+  /* SIMULADO */
+  .simulado-filters { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .simulado-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 16px; padding: 32px; }
+  .simulado-progress { font-size: 13px; color: var(--muted); margin-bottom: 20px; display: flex; justify-content: space-between; }
+  .progress-bar { width: 100%; height: 3px; background: var(--bg3); border-radius: 2px; margin-bottom: 28px; }
+  .progress-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.3s; }
+  .simulado-apoio-btn { font-size: 12px; color: var(--muted); cursor: pointer; margin-bottom: 16px; display: inline-block; background: var(--bg3); border: 1px solid var(--border); padding: 5px 10px; border-radius: 6px; }
+  .simulado-apoio-btn:hover { color: var(--text); }
+  .simulado-question { font-size: 17px; line-height: 1.6; margin-bottom: 28px; }
+  .simulado-btns { display: flex; gap: 14px; }
+  .btn-certo { flex: 1; padding: 16px; border-radius: 12px; border: 1px solid var(--border); background: none; color: var(--text); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+  .btn-certo:hover { background: rgba(200,241,53,0.1); border-color: var(--green); color: var(--green); }
+  .btn-errado { flex: 1; padding: 16px; border-radius: 12px; border: 1px solid var(--border); background: none; color: var(--text); font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+  .btn-errado:hover { background: rgba(255,68,68,0.1); border-color: var(--red); color: var(--red); }
+  .resultado-overlay { text-align: center; padding: 20px 0; }
+  .resultado-icon { font-size: 48px; margin-bottom: 12px; }
+  .resultado-texto { font-size: 16px; color: var(--muted); margin-bottom: 6px; }
+  .gabarito-reveal { font-size: 14px; margin-bottom: 24px; }
+  .btn-next { background: var(--green); color: #0a0a0a; border: none; padding: 14px 32px; border-radius: 10px; font-family: inherit; font-weight: 700; font-size: 15px; cursor: pointer; transition: all 0.15s; }
+  .btn-next:hover { background: var(--green2); }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-state h3 { font-size: 18px; margin-bottom: 8px; color: var(--text); }
+
+  /* ESTATISTICAS */
+  .stats-filters { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .chart-bar-row { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+  .chart-bar-label { font-size: 13px; color: var(--muted); min-width: 120px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chart-bar-track { flex: 1; background: var(--bg3); border-radius: 4px; height: 20px; overflow: hidden; }
+  .chart-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s; display: flex; align-items: center; padding-left: 8px; font-size: 11px; font-weight: 700; color: #0a0a0a; }
+  .chart-bar-pct { font-size: 13px; color: var(--muted); min-width: 36px; text-align: right; font-family: 'IBM Plex Mono', monospace; }
+  .meta-input { width: 80px; background: var(--bg3); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 16px; padding: 6px 10px; border-radius: 8px; outline: none; text-align: center; }
+  .meta-input:focus { border-color: var(--green); }
+
+  /* REVISAO */
+  .revisao-item { background: var(--bg2); border: 1px solid var(--red); border-radius: 12px; padding: 16px 20px; margin-bottom: 10px; }
+  .revisao-item .question-text { font-size: 14px; line-height: 1.5; }
+
+  /* MODAL */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: none; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: 16px; padding: 28px; width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .modal-title { font-size: 18px; font-weight: 600; }
+  .close-btn { background: none; border: none; color: var(--muted); font-size: 22px; cursor: pointer; line-height: 1; }
+  .close-btn:hover { color: var(--text); }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 12px 20px; border-radius: 10px; font-size: 14px; z-index: 300; opacity: 0; transform: translateY(10px); transition: all 0.25s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+
+  @media (max-width: 600px) {
+    .form-row { grid-template-columns: 1fr; }
+    .hero h1 { font-size: 28px; }
+    nav { padding: 0 12px; gap: 2px; }
+    .nav-btn { padding: 8px 10px; font-size: 13px; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">CACD<span>.play</span></div>
+  <button class="nav-btn active" onclick="showPage('inicio')">Início</button>
+  <button class="nav-btn" onclick="showPage('simulado')">Simulado</button>
+  <button class="nav-btn" onclick="showPage('revisao')">Revisão</button>
+  <button class="nav-btn" onclick="showPage('estatisticas')">Estatísticas</button>
+  <button class="nav-btn" onclick="showPage('banco')">Banco</button>
+  <div class="nav-spacer"></div>
+  <div class="streak">🔥 <span class="streak-num" id="streakNum">0</span> dias</div>
+</nav>
+
+<!-- INICIO -->
+<div class="page active" id="page-inicio">
+  <div class="hero">
+    <h1>Bem-vindo de volta,<br><span>futuro diplomata.</span></h1>
+    <p>Resolva questões Certo/Errado e domine cada disciplina rumo à aprovação.</p>
+    <div class="hero-btns">
+      <button class="btn-primary" onclick="showPage('simulado')">▶ Começar simulado</button>
+      <button class="btn-secondary" onclick="showPage('banco')">+ Adicionar questões</button>
+    </div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Total respondidas</div>
+      <div class="stat-value green" id="home-total">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Taxa de acerto</div>
+      <div class="stat-value" id="home-acerto">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Questões no banco</div>
+      <div class="stat-value" id="home-banco">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Para revisar</div>
+      <div class="stat-value red" id="home-revisao">0</div>
+    </div>
+  </div>
+</div>
+
+<!-- BANCO -->
+<div class="page" id="page-banco">
+  <div class="section-header">
+    <div class="section-title">Cadastro de questões</div>
+  </div>
+  <div class="form-card">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Ano</label>
+        <input type="number" class="form-input" id="f-ano" value="2024" min="2000" max="2030">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Matéria</label>
+        <select class="form-select" id="f-materia">
+          <option>Português</option>
+          <option>História</option>
+          <option>Geografia</option>
+          <option>Direito</option>
+          <option>Inglês</option>
+          <option>Espanhol</option>
+          <option>Economia</option>
+          <option>Atualidades</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Sub-matéria <span class="optional">(opcional)</span></label>
+      <input type="text" class="form-input" id="f-submateria" placeholder="Ex: Concordância verbal, Tratados internacionais...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Texto de apoio <span class="optional">(opcional)</span></label>
+      <textarea class="form-textarea" id="f-apoio" placeholder="Cole aqui o texto de apoio, se houver..."></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Enunciado da questão</label>
+      <textarea class="form-textarea" id="f-enunciado" placeholder="Digite o enunciado da questão..." style="min-height:110px"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Gabarito</label>
+      <div class="gabarito-row">
+        <div class="radio-card certo" id="rc-certo" onclick="selectGabarito('certo')">✓ Certo</div>
+        <div class="radio-card errado" id="rc-errado" onclick="selectGabarito('errado')">✗ Errado</div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" onclick="salvarQuestao()" id="btn-salvar">Salvar questão</button>
+      <button class="btn-secondary" onclick="cancelarEdicao()" id="btn-cancelar" style="display:none">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="section-header" style="margin-top:36px">
+    <div class="section-title">Questões cadastradas — <span id="total-questoes">0</span></div>
+  </div>
+  <div class="questions-list" id="questions-list">
+    <div class="empty-state"><h3>Nenhuma questão ainda</h3><p>Cadastre a primeira questão acima.</p></div>
+  </div>
+</div>
+
+<!-- SIMULADO -->
+<div class="page" id="page-simulado">
+  <div class="section-header">
+    <div class="section-title">Simulado</div>
+  </div>
+  <div class="simulado-filters">
+    <select class="form-select" id="sim-materia" style="width:auto" onchange="carregarSimulado()">
+      <option value="">Todas as matérias</option>
+      <option>Português</option><option>História</option><option>Geografia</option>
+      <option>Direito</option><option>Inglês</option><option>Espanhol</option>
+      <option>Economia</option><option>Atualidades</option>
+    </select>
+    <select class="form-select" id="sim-ano" style="width:auto" onchange="carregarSimulado()">
+      <option value="">Todos os anos</option>
+    </select>
+    <button class="btn-secondary" onclick="carregarSimulado()" style="padding:8px 16px;font-size:13px">↺ Recarregar</button>
+  </div>
+  <div id="simulado-area"></div>
+</div>
+
+<!-- REVISAO -->
+<div class="page" id="page-revisao">
+  <div class="section-header">
+    <div class="section-title">Questões para revisar</div>
+  </div>
+  <div id="revisao-list"></div>
+</div>
+
+<!-- ESTATISTICAS -->
+<div class="page" id="page-estatisticas">
+  <div class="section-header">
+    <div class="section-title">Estatísticas</div>
+  </div>
+  <div class="stats-filters">
+    <select class="form-select" id="est-materia" style="width:auto" onchange="renderEstatisticas()">
+      <option value="">Todas as matérias</option>
+      <option>Português</option><option>História</option><option>Geografia</option>
+      <option>Direito</option><option>Inglês</option><option>Espanhol</option>
+      <option>Economia</option><option>Atualidades</option>
+    </select>
+    <select class="form-select" id="est-ano" style="width:auto" onchange="renderEstatisticas()">
+      <option value="">Todos os anos</option>
+    </select>
+  </div>
+  <div class="stats-grid" id="est-cards"></div>
+  <div style="margin-top:32px">
+    <div class="section-title" style="margin-bottom:16px">Desempenho por matéria</div>
+    <div id="est-barras"></div>
+  </div>
+  <div style="margin-top:32px">
+    <div class="section-title" style="margin-bottom:16px">Meta de aproveitamento</div>
+    <div style="display:flex;align-items:center;gap:12px;color:var(--muted);font-size:14px">
+      Meta: <input type="number" class="meta-input" id="meta-input" value="70" min="0" max="100"> %
+      <span id="meta-status" style="font-size:13px"></span>
+    </div>
+  </div>
+  <div style="margin-top:32px">
+    <div class="section-title" style="margin-bottom:16px">Questões mais erradas</div>
+    <div id="est-erros"></div>
+  </div>
+</div>
+
+<!-- MODAL EDITAR -->
+<div class="modal-overlay" id="modal-editar">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Editar questão</div>
+      <button class="close-btn" onclick="fecharModal()">×</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Ano</label>
+        <input type="number" class="form-input" id="e-ano">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Matéria</label>
+        <select class="form-select" id="e-materia">
+          <option>Português</option><option>História</option><option>Geografia</option>
+          <option>Direito</option><option>Inglês</option><option>Espanhol</option>
+          <option>Economia</option><option>Atualidades</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Sub-matéria <span class="optional">(opcional)</span></label>
+      <input type="text" class="form-input" id="e-submateria">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Texto de apoio <span class="optional">(opcional)</span></label>
+      <textarea class="form-textarea" id="e-apoio"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Enunciado</label>
+      <textarea class="form-textarea" id="e-enunciado" style="min-height:110px"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Gabarito</label>
+      <div class="gabarito-row">
+        <div class="radio-card certo" id="ec-certo" onclick="selectGabaritoEdit('certo')">✓ Certo</div>
+        <div class="radio-card errado" id="ec-errado" onclick="selectGabaritoEdit('errado')">✗ Errado</div>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn-primary" onclick="salvarEdicao()">Salvar alterações</button>
+      <button class="btn-secondary" onclick="fecharModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://nghsaxzwkhilzawqgsas.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_cW8aT4-I-XNu0bBrw14wLA_sUx49jWU';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let questoes = [];
+let respostas = [];
+let gabaritoSelecionado = '';
+let gabaritoEditSelecionado = '';
+let editandoId = null;
+let simuladoQuestoes = [];
+let simIdx = 0;
+let simRespondida = false;
+
+async function init() {
+  await criarTabelaSeNecessario();
+  await carregarDados();
+}
+
+async function criarTabelaSeNecessario() {
+  // Tenta inserir na tabela; se não existir, cria via SQL
+  const { error } = await sb.from('questoes').select('id').limit(1);
+  if (error && error.code === '42P01') {
+    await sb.rpc('exec_sql', { sql: `
+      CREATE TABLE IF NOT EXISTS questoes (
+        id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+        ano integer, materia text, submateria text,
+        apoio text, enunciado text, gabarito text,
+        created_at timestamptz DEFAULT now()
+      );
+      CREATE TABLE IF NOT EXISTS respostas (
+        id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+        questao_id uuid, acertou boolean,
+        respondida_em timestamptz DEFAULT now()
+      );
+    `});
+  }
+}
+
+async function carregarDados() {
+  const { data: q } = await sb.from('questoes').select('*').order('created_at', { ascending: true });
+  const { data: r } = await sb.from('respostas').select('*').order('respondida_em', { ascending: false });
+  questoes = q || [];
+  respostas = r || [];
+  renderQuestoes();
+  renderHome();
+  renderRevisao();
+  renderEstatisticas();
+  popularFiltroAnos();
+}
+
+function popularFiltroAnos() {
+  const anos = [...new Set(questoes.map(q => q.ano))].sort((a,b) => b-a);
+  ['sim-ano','est-ano'].forEach(id => {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">Todos os anos</option>';
+    anos.forEach(a => sel.innerHTML += `<option>${a}</option>`);
+  });
+}
+
+// NAVEGAÇÃO
+function showPage(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  const btns = document.querySelectorAll('.nav-btn');
+  const idx = ['inicio','simulado','revisao','estatisticas','banco'];
+  btns[idx.indexOf(page)]?.classList.add('active');
+  if (page === 'simulado') carregarSimulado();
+  if (page === 'estatisticas') renderEstatisticas();
+  if (page === 'revisao') renderRevisao();
+}
+
+// TOAST
+function toast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 2500);
+}
+
+// GABARITO RADIO
+function selectGabarito(v) {
+  gabaritoSelecionado = v;
+  document.getElementById('rc-certo').classList.toggle('selected', v==='certo');
+  document.getElementById('rc-errado').classList.toggle('selected', v==='errado');
+}
+function selectGabaritoEdit(v) {
+  gabaritoEditSelecionado = v;
+  document.getElementById('ec-certo').classList.toggle('selected', v==='certo');
+  document.getElementById('ec-errado').classList.toggle('selected', v==='errado');
+}
+
+// SALVAR QUESTÃO
+async function salvarQuestao() {
+  const enunciado = document.getElementById('f-enunciado').value.trim();
+  if (!enunciado) { toast('Preencha o enunciado', 'error'); return; }
+  if (!gabaritoSelecionado) { toast('Selecione o gabarito', 'error'); return; }
+  const btn = document.getElementById('btn-salvar');
+  btn.textContent = 'Salvando...'; btn.disabled = true;
+  const { error } = await sb.from('questoes').insert({
+    ano: parseInt(document.getElementById('f-ano').value),
+    materia: document.getElementById('f-materia').value,
+    submateria: document.getElementById('f-submateria').value.trim() || null,
+    apoio: document.getElementById('f-apoio').value.trim() || null,
+    enunciado,
+    gabarito: gabaritoSelecionado
+  });
+  btn.textContent = 'Salvar questão'; btn.disabled = false;
+  if (error) { toast('Erro ao salvar', 'error'); return; }
+  toast('Questão salva!', 'success');
+  document.getElementById('f-enunciado').value = '';
+  document.getElementById('f-apoio').value = '';
+  document.getElementById('f-submateria').value = '';
+  selectGabarito('');
+  await carregarDados();
+}
+
+// RENDER QUESTÕES BANCO
+function renderQuestoes() {
+  const list = document.getElementById('questions-list');
+  document.getElementById('total-questoes').textContent = questoes.length;
+  if (!questoes.length) {
+    list.innerHTML = '<div class="empty-state"><h3>Nenhuma questão ainda</h3><p>Cadastre a primeira questão acima.</p></div>';
+    return;
+  }
+  list.innerHTML = questoes.map((q, i) => `
+    <div class="question-item">
+      <div class="question-num">${i+1}</div>
+      <div class="question-content">
+        <div class="question-meta">
+          <span class="tag tag-materia">${q.materia}</span>
+          <span class="tag tag-ano">${q.ano}</span>
+          ${q.submateria ? `<span class="tag tag-sub">${q.submateria}</span>` : ''}
+        </div>
+        <div class="question-text">${q.enunciado}</div>
+        ${q.apoio ? `<div class="question-apoio" onclick="toggleApoio('apoio-${q.id}')">📄 Ver texto de apoio</div><div class="apoio-text" id="apoio-${q.id}">${q.apoio}</div>` : ''}
+        <span class="gabarito-badge ${q.gabarito==='certo'?'badge-certo':'badge-errado'}">${q.gabarito==='certo'?'✓ Certo':'✗ Errado'}</span>
+      </div>
+      <div class="question-actions">
+        <button class="icon-btn" title="Editar" onclick="abrirEditar('${q.id}')">✏️</button>
+        <button class="icon-btn" title="Excluir" onclick="excluirQuestao('${q.id}')">🗑️</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toggleApoio(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('visible');
+}
+
+// EXCLUIR
+async function excluirQuestao(id) {
+  if (!confirm('Excluir esta questão?')) return;
+  await sb.from('respostas').delete().eq('questao_id', id);
+  await sb.from('questoes').delete().eq('id', id);
+  toast('Questão excluída');
+  await carregarDados();
+}
+
+// EDITAR MODAL
+function abrirEditar(id) {
+  const q = questoes.find(x => x.id === id);
+  if (!q) return;
+  editandoId = id;
+  document.getElementById('e-ano').value = q.ano;
+  document.getElementById('e-materia').value = q.materia;
+  document.getElementById('e-submateria').value = q.submateria || '';
+  document.getElementById('e-apoio').value = q.apoio || '';
+  document.getElementById('e-enunciado').value = q.enunciado;
+  selectGabaritoEdit(q.gabarito);
+  document.getElementById('modal-editar').classList.add('open');
+}
+function fecharModal() {
+  document.getElementById('modal-editar').classList.remove('open');
+  editandoId = null;
+}
+async function salvarEdicao() {
+  if (!editandoId) return;
+  const enunciado = document.getElementById('e-enunciado').value.trim();
+  if (!enunciado) { toast('Preencha o enunciado', 'error'); return; }
+  if (!gabaritoEditSelecionado) { toast('Selecione o gabarito', 'error'); return; }
+  const { error } = await sb.from('questoes').update({
+    ano: parseInt(document.getElementById('e-ano').value),
+    materia: document.getElementById('e-materia').value,
+    submateria: document.getElementById('e-submateria').value.trim() || null,
+    apoio: document.getElementById('e-apoio').value.trim() || null,
+    enunciado,
+    gabarito: gabaritoEditSelecionado
+  }).eq('id', editandoId);
+  if (error) { toast('Erro ao salvar', 'error'); return; }
+  toast('Questão atualizada!', 'success');
+  fecharModal();
+  await carregarDados();
+}
+function cancelarEdicao() { fecharModal(); }
+
+// SIMULADO
+function carregarSimulado() {
+  const mat = document.getElementById('sim-materia').value;
+  const ano = document.getElementById('sim-ano').value;
+  let pool = [...questoes];
+  if (mat) pool = pool.filter(q => q.materia === mat);
+  if (ano) pool = pool.filter(q => String(q.ano) === ano);
+  simuladoQuestoes = pool.sort(() => Math.random() - 0.5);
+  simIdx = 0; simRespondida = false;
+  renderSimulado();
+}
+
+function renderSimulado() {
+  const area = document.getElementById('simulado-area');
+  if (!simuladoQuestoes.length) {
+    area.innerHTML = '<div class="empty-state"><h3>Sem questões</h3><p>Cadastre questões ou ajuste os filtros.</p></div>';
+    return;
+  }
+  if (simIdx >= simuladoQuestoes.length) {
+    const total = simuladoQuestoes.length;
+    const acertos = simuladoQuestoes.filter((q,i) => {
+      const r = respostas.find(r => r.questao_id === q.id);
+      return r && r.acertou;
+    }).length;
+    area.innerHTML = `<div class="simulado-card" style="text-align:center;padding:48px">
+      <div style="font-size:48px;margin-bottom:16px">🎯</div>
+      <div style="font-size:24px;font-weight:700;margin-bottom:8px">Simulado concluído!</div>
+      <div style="color:var(--muted);margin-bottom:24px">Você respondeu ${total} questões nesta sessão</div>
+      <button class="btn-primary" onclick="carregarSimulado()">Novo simulado</button>
+    </div>`;
+    return;
+  }
+  const q = simuladoQuestoes[simIdx];
+  const pct = Math.round((simIdx / simuladoQuestoes.length) * 100);
+  area.innerHTML = `
+    <div class="simulado-card">
+      <div class="simulado-progress">
+        <span>${simIdx + 1} de ${simuladoQuestoes.length}</span>
+        <span class="tag tag-materia">${q.materia}${q.submateria ? ' · ' + q.submateria : ''}</span>
+        <span>${q.ano}</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      ${q.apoio ? `<span class="simulado-apoio-btn" onclick="toggleApoio('sim-apoio')">📄 Ver texto de apoio</span><div class="apoio-text" id="sim-apoio">${q.apoio}</div>` : ''}
+      <div class="simulado-question">${q.enunciado}</div>
+      <div class="simulado-btns" id="sim-btns">
+        <button class="btn-certo" onclick="responder('certo')">✓ Certo</button>
+        <button class="btn-errado" onclick="responder('errado')">✗ Errado</button>
+      </div>
+      <div id="sim-resultado" style="display:none"></div>
+    </div>`;
+}
+
+async function responder(resp) {
+  if (simRespondida) return;
+  simRespondida = true;
+  const q = simuladoQuestoes[simIdx];
+  const acertou = resp === q.gabarito;
+  await sb.from('respostas').insert({ questao_id: q.id, acertou });
+  respostas.unshift({ questao_id: q.id, acertou, respondida_em: new Date().toISOString() });
+  document.getElementById('sim-btns').style.display = 'none';
+  const res = document.getElementById('sim-resultado');
+  res.style.display = 'block';
+  res.innerHTML = `
+    <div class="resultado-overlay">
+      <div class="resultado-icon">${acertou ? '✅' : '❌'}</div>
+      <div class="resultado-texto">${acertou ? 'Correto!' : 'Incorreto!'}</div>
+      <div class="gabarito-reveal" style="color:var(--muted)">Gabarito: <strong style="color:${q.gabarito==='certo'?'var(--green)':'var(--red)'}">${q.gabarito==='certo'?'Certo':'Errado'}</strong></div>
+      <button class="btn-next" onclick="proximaQuestao()">Próxima →</button>
+    </div>`;
+  renderHome();
+}
+
+function proximaQuestao() {
+  simIdx++; simRespondida = false;
+  renderSimulado();
+}
+
+// HOME
+function renderHome() {
+  const total = respostas.length;
+  const acertos = respostas.filter(r => r.acertou).length;
+  const pct = total ? Math.round((acertos/total)*100) : null;
+  document.getElementById('home-total').textContent = total;
+  document.getElementById('home-acerto').textContent = pct !== null ? pct + '%' : '—';
+  document.getElementById('home-acerto').style.color = pct >= 70 ? 'var(--green)' : pct !== null ? 'var(--red)' : 'var(--text)';
+  document.getElementById('home-banco').textContent = questoes.length;
+  const erradas = [...new Set(respostas.filter(r => !r.acertou).map(r => r.questao_id))].length;
+  document.getElementById('home-revisao').textContent = erradas;
+}
+
+// REVISÃO
+function renderRevisao() {
+  const erradasIds = [...new Set(respostas.filter(r => !r.acertou).map(r => r.questao_id))];
+  const erradas = questoes.filter(q => erradasIds.includes(q.id));
+  const list = document.getElementById('revisao-list');
+  if (!erradas.length) {
+    list.innerHTML = '<div class="empty-state"><h3>Nenhuma questão para revisar</h3><p>Continue fazendo simulados!</p></div>';
+    return;
+  }
+  list.innerHTML = erradas.map((q, i) => `
+    <div class="revisao-item">
+      <div class="question-meta"style="margin-bottom:8px">
+        <span class="tag tag-materia">${q.materia}</span>
+        <span class="tag tag-ano">${q.ano}</span>
+        ${q.submateria ? `<span class="tag tag-sub">${q.submateria}</span>` : ''}
+      </div>
+      <div class="question-text">${q.enunciado}</div>
+      ${q.apoio ? `<div class="question-apoio" onclick="toggleApoio('rev-apoio-${q.id}')">📄 Ver texto de apoio</div><div class="apoio-text" id="rev-apoio-${q.id}">${q.apoio}</div>` : ''}
+      <span class="gabarito-badge ${q.gabarito==='certo'?'badge-certo':'badge-errado'}" style="margin-top:10px">Gabarito: ${q.gabarito==='certo'?'✓ Certo':'✗ Errado'}</span>
+    </div>
+  `).join('');
+}
+
+// ESTATÍSTICAS
+function renderEstatisticas() {
+  const mat = document.getElementById('est-materia')?.value || '';
+  const ano = document.getElementById('est-ano')?.value || '';
+  let pool = [...respostas];
+  let qpool = [...questoes];
+  if (mat) { qpool = qpool.filter(q => q.materia === mat); pool = pool.filter(r => qpool.find(q => q.id === r.questao_id)); }
+  if (ano) { const ids = questoes.filter(q => String(q.ano) === ano).map(q => q.id); pool = pool.filter(r => ids.includes(r.questao_id)); }
+
+  const total = pool.length;
+  const acertos = pool.filter(r => r.acertou).length;
+  const erros = total - acertos;
+  const pct = total ? Math.round((acertos/total)*100) : 0;
+
+  document.getElementById('est-cards').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Respondidas</div><div class="stat-value">${total}</div></div>
+    <div class="stat-card"><div class="stat-label">Acertos</div><div class="stat-value green">${acertos}</div></div>
+    <div class="stat-card"><div class="stat-label">Erros</div><div class="stat-value red">${erros}</div></div>
+    <div class="stat-card"><div class="stat-label">Aproveitamento</div><div class="stat-value" style="color:${pct>=70?'var(--green)':'var(--red)'}">${pct}%</div></div>
+  `;
+
+  // Barras por matéria
+  const materias = [...new Set(questoes.map(q => q.materia))];
+  const barras = materias.map(m => {
+    const ids = questoes.filter(q => q.materia === m).map(q => q.id);
+    const rs = pool.filter(r => ids.includes(r.questao_id));
+    const ac = rs.filter(r => r.acertou).length;
+    const p = rs.length ? Math.round((ac/rs.length)*100) : null;
+    return { m, p, n: rs.length };
+  }).filter(x => x.n > 0).sort((a,b) => b.p - a.p);
+
+  document.getElementById('est-barras').innerHTML = barras.length ? barras.map(b => `
+    <div class="chart-bar-row">
+      <div class="chart-bar-label">${b.m}</div>
+      <div class="chart-bar-track">
+        <div class="chart-bar-fill" style="width:${b.p}%;background:${b.p>=70?'var(--green)':'var(--red)'}">
+          ${b.p > 15 ? b.p + '%' : ''}
+        </div>
+      </div>
+      <div class="chart-bar-pct">${b.p}%</div>
+    </div>
+  `).join('') : '<div style="color:var(--muted);font-size:14px">Sem dados ainda.</div>';
+
+  // Meta
+  const meta = parseInt(document.getElementById('meta-input')?.value || 70);
+  const metaStatus = document.getElementById('meta-status');
+  if (metaStatus && total > 0) {
+    metaStatus.textContent = pct >= meta ? `✅ Meta atingida (${pct}% ≥ ${meta}%)` : `⚠️ Abaixo da meta (${pct}% < ${meta}%)`;
+    metaStatus.style.color = pct >= meta ? 'var(--green)' : 'var(--red)';
+  }
+
+  // Questões mais erradas
+  const errosPorQ = {};
+  respostas.filter(r => !r.acertou).forEach(r => { errosPorQ[r.questao_id] = (errosPorQ[r.questao_id]||0)+1; });
+  const topErros = Object.entries(errosPorQ).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  document.getElementById('est-erros').innerHTML = topErros.length ? topErros.map(([id, n]) => {
+    const q = questoes.find(x => x.id === id);
+    if (!q) return '';
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 18px;margin-bottom:8px">
+      <div class="question-meta" style="margin-bottom:6px"><span class="tag tag-materia">${q.materia}</span><span class="tag tag-ano">${q.ano}</span></div>
+      <div style="font-size:14px;line-height:1.5">${q.enunciado}</div>
+      <div style="font-size:12px;color:var(--red);margin-top:6px">Errada ${n}× — Gabarito: ${q.gabarito}</div>
+    </div>`;
+  }).join('') : '<div style="color:var(--muted);font-size:14px">Nenhum erro registrado ainda.</div>';
+}
+
+document.getElementById('meta-input')?.addEventListener('input', renderEstatisticas);
+
+init();
+</script>
+</body>
+</html>
