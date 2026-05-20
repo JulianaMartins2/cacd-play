@@ -169,7 +169,6 @@
   <div class="logo">CACD<span>.play</span></div>
   <button class="nav-btn active" onclick="showPage('inicio')">Início</button>
   <button class="nav-btn" onclick="showPage('simulado')">Simulado</button>
-  <button class="nav-btn" onclick="showPage('revisao')">Revisão</button>
   <button class="nav-btn" onclick="showPage('estatisticas')">Estatísticas</button>
   <button class="nav-btn" onclick="showPage('banco')">Banco</button>
   <div class="nav-spacer"></div>
@@ -284,6 +283,7 @@
       <option value="">Todas as questões</option>
       <option value="novas">Nunca respondidas</option>
       <option value="vistas">Já respondidas</option>
+      <option value="revisao">🔴 Revisão das erradas</option>
     </select>
     <button class="btn-secondary" onclick="carregarSimulado()" style="padding:8px 16px;font-size:13px">↺ Recarregar</button>
   </div>
@@ -462,11 +462,10 @@ function showPage(page) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   const btns = document.querySelectorAll('.nav-btn');
-  const idx = ['inicio','simulado','revisao','estatisticas','banco'];
+  const idx = ['inicio','simulado','estatisticas','banco'];
   btns[idx.indexOf(page)]?.classList.add('active');
   if (page === 'simulado') carregarSimulado();
   if (page === 'estatisticas') renderEstatisticas();
-  if (page === 'revisao') renderRevisao();
 }
 
 // TOAST
@@ -602,8 +601,27 @@ function carregarSimulado() {
   let pool = [...questoes];
   if (mat) pool = pool.filter(q => q.materia === mat);
   if (ano) pool = pool.filter(q => String(q.ano) === ano);
-  if (vistas === 'novas') pool = pool.filter(q => !idsRespondidas.has(q.id));
-  if (vistas === 'vistas') pool = pool.filter(q => idsRespondidas.has(q.id));
+
+  if (vistas === 'novas') {
+    pool = pool.filter(q => !idsRespondidas.has(q.id));
+  } else if (vistas === 'vistas') {
+    pool = pool.filter(q => idsRespondidas.has(q.id));
+  } else if (vistas === 'revisao') {
+    // Questões que já errei e ainda não acertei 2x consecutivas
+    pool = pool.filter(q => {
+      const rs = respostas.filter(r => r.questao_id === q.id);
+      if (!rs.some(r => !r.acertou)) return false; // nunca errou
+      // Conta acertos consecutivos mais recentes
+      const sorted = [...rs].sort((a,b) => new Date(b.respondida_em) - new Date(a.respondida_em));
+      let acertosConsecutivos = 0;
+      for (const r of sorted) {
+        if (r.acertou) acertosConsecutivos++;
+        else break;
+      }
+      return acertosConsecutivos < 2;
+    });
+  }
+
   simuladoQuestoes = pool.sort(() => Math.random() - 0.5);
   simIdx = 0; simRespondida = false;
   renderSimulado();
@@ -683,8 +701,16 @@ function renderHome() {
   document.getElementById('home-acerto').textContent = pct !== null ? pct + '%' : '—';
   document.getElementById('home-acerto').style.color = pct >= 70 ? 'var(--green)' : pct !== null ? 'var(--red)' : 'var(--text)';
   document.getElementById('home-banco').textContent = questoes.length;
-  const erradas = [...new Set(respostas.filter(r => !r.acertou).map(r => r.questao_id))].length;
-  document.getElementById('home-revisao').textContent = erradas;
+  // Conta questões em revisão (erradas e menos de 2 acertos consecutivos)
+  const paraRevisar = questoes.filter(q => {
+    const rs = respostas.filter(r => r.questao_id === q.id);
+    if (!rs.some(r => !r.acertou)) return false;
+    const sorted = [...rs].sort((a,b) => new Date(b.respondida_em) - new Date(a.respondida_em));
+    let ac = 0;
+    for (const r of sorted) { if (r.acertou) ac++; else break; }
+    return ac < 2;
+  }).length;
+  document.getElementById('home-revisao').textContent = paraRevisar;
 }
 
 // REVISÃO
