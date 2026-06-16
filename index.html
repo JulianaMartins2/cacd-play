@@ -210,6 +210,31 @@
   <div class="section-header">
     <div class="section-title">Cadastro de questões</div>
   </div>
+
+  <!-- IMPORTAR CSV -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:28px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">📂 Importar base de dados (CSV)</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Importe várias questões de uma vez. O arquivo deve ter as colunas: <span style="color:var(--green);font-family:monospace">ano, materia, submateria, apoio, enunciado, gabarito</span></div>
+    <div id="csv-drop-area" onclick="document.getElementById('csv-input').click()" style="border:2px dashed var(--border2);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:all 0.15s" onmouseover="this.style.borderColor='var(--green)'" onmouseout="this.style.borderColor='var(--border2)'">
+      <div style="font-size:28px;margin-bottom:8px">⬆️</div>
+      <div style="font-size:14px;color:var(--muted)">Clique para selecionar o arquivo CSV</div>
+      <div style="font-size:12px;color:var(--muted2);margin-top:4px">ou arraste e solte aqui</div>
+    </div>
+    <input type="file" id="csv-input" accept=".csv" style="display:none" onchange="processarCSV(this.files[0])">
+    <div id="csv-preview" style="display:none;margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div id="csv-info" style="font-size:13px;color:var(--muted)"></div>
+        <button class="btn-primary" onclick="importarCSV()" id="btn-importar" style="padding:10px 20px;font-size:14px">⬆ Importar questões</button>
+      </div>
+      <div id="csv-tabela" style="overflow-x:auto;max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;font-size:12px"></div>
+    </div>
+    <div id="csv-progresso" style="display:none;margin-top:16px">
+      <div style="font-size:13px;color:var(--muted);margin-bottom:8px" id="csv-progresso-txt">Importando...</div>
+      <div style="background:var(--bg3);border-radius:4px;height:6px;overflow:hidden">
+        <div id="csv-progresso-bar" style="height:100%;background:var(--green);width:0%;transition:width 0.3s;border-radius:4px"></div>
+      </div>
+    </div>
+  </div>
   <div class="form-card">
     <div class="form-row">
       <div class="form-group">
@@ -474,6 +499,106 @@ function toast(msg, type='') {
   t.textContent = msg; t.className = 'toast show ' + type;
   setTimeout(() => t.className = 'toast', 2500);
 }
+
+// CSV IMPORT
+let csvDados = [];
+
+function parseCSV(texto) {
+  const linhas = texto.trim().split('\n');
+  const headers = linhas[0].split(',').map(h => h.trim().replace(/"/g,''));
+  return linhas.slice(1).map(linha => {
+    const cols = [];
+    let cur = '', inQ = false;
+    for (let c of linha) {
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { cols.push(cur); cur = ''; }
+      else cur += c;
+    }
+    cols.push(cur);
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (cols[i]||'').trim().replace(/^"|"$/g,''));
+    return obj;
+  }).filter(r => r.enunciado && r.gabarito);
+}
+
+function processarCSV(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    csvDados = parseCSV(e.target.result);
+    const preview = document.getElementById('csv-preview');
+    const info = document.getElementById('csv-info');
+    const tabela = document.getElementById('csv-tabela');
+    preview.style.display = 'block';
+    info.textContent = `${csvDados.length} questões encontradas — prévia das primeiras 5:`;
+    const amostra = csvDados.slice(0, 5);
+    tabela.innerHTML = `<table style="width:100%;border-collapse:collapse">
+      <thead><tr style="background:var(--bg3)">
+        <th style="padding:8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">Ano</th>
+        <th style="padding:8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">Matéria</th>
+        <th style="padding:8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">Sub-matéria</th>
+        <th style="padding:8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">Enunciado</th>
+        <th style="padding:8px;text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">Gabarito</th>
+      </tr></thead>
+      <tbody>${amostra.map(r => `<tr>
+        <td style="padding:8px;border-bottom:1px solid var(--border);white-space:nowrap">${r.ano}</td>
+        <td style="padding:8px;border-bottom:1px solid var(--border);white-space:nowrap">${r.materia}</td>
+        <td style="padding:8px;border-bottom:1px solid var(--border);color:var(--muted)">${r.submateria||'—'}</td>
+        <td style="padding:8px;border-bottom:1px solid var(--border);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.enunciado}</td>
+        <td style="padding:8px;border-bottom:1px solid var(--border);font-weight:700;color:${r.gabarito==='certo'?'var(--green)':'var(--red)'}">${r.gabarito}</td>
+      </tr>`).join('')}</tbody></table>`;
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+async function importarCSV() {
+  if (!csvDados.length) return;
+  const btn = document.getElementById('btn-importar');
+  const prog = document.getElementById('csv-progresso');
+  const progTxt = document.getElementById('csv-progresso-txt');
+  const progBar = document.getElementById('csv-progresso-bar');
+  btn.disabled = true;
+  document.getElementById('csv-preview').style.display = 'none';
+  prog.style.display = 'block';
+  const LOTE = 10;
+  let inseridas = 0, erros = 0;
+  for (let i = 0; i < csvDados.length; i += LOTE) {
+    const lote = csvDados.slice(i, i + LOTE).map(r => ({
+      ano: parseInt(r.ano) || new Date().getFullYear(),
+      materia: r.materia,
+      submateria: r.submateria || null,
+      apoio: r.apoio || null,
+      enunciado: r.enunciado,
+      gabarito: r.gabarito.toLowerCase().startsWith('c') ? 'certo' : 'errado'
+    }));
+    const { error } = await sb.from('questoes').insert(lote);
+    if (error) erros += lote.length;
+    else inseridas += lote.length;
+    const pct = Math.round(((i + LOTE) / csvDados.length) * 100);
+    progBar.style.width = Math.min(pct, 100) + '%';
+    progTxt.textContent = `Importando... ${Math.min(inseridas + erros, csvDados.length)} de ${csvDados.length}`;
+  }
+  progTxt.textContent = `✅ ${inseridas} questões importadas!${erros ? ` (${erros} com erro)` : ''}`;
+  progBar.style.width = '100%';
+  btn.disabled = false;
+  csvDados = [];
+  document.getElementById('csv-input').value = '';
+  await carregarDados();
+  toast(`${inseridas} questões importadas!`, 'success');
+}
+
+// Drag and drop CSV
+window.addEventListener('load', () => {
+  const area = document.getElementById('csv-drop-area');
+  if (!area) return;
+  area.addEventListener('dragover', e => { e.preventDefault(); area.style.borderColor = 'var(--green)'; });
+  area.addEventListener('dragleave', () => area.style.borderColor = 'var(--border2)');
+  area.addEventListener('drop', e => {
+    e.preventDefault(); area.style.borderColor = 'var(--border2)';
+    const file = e.dataTransfer.files[0];
+    if (file) processarCSV(file);
+  });
+});
 
 // GABARITO RADIO
 function selectGabarito(v) {
