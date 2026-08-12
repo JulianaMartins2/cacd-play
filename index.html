@@ -930,27 +930,51 @@ function renderEstatisticas() {
     </div>
   `).join('') : '<div style="color:var(--muted);font-size:14px">Sem dados ainda. Faça simulados para ver seu desempenho.</div>';
 
-  // Sub-matérias mais cobradas (baseado no banco de questões)
-  const subCount = {};
+  // Sub-matérias mais cobradas — banco de questões x o que você já fez
+  const subBanco = {}, subFeitas = {};
+  const answeredIds = new Set(respostas.map(r => r.questao_id));
+  const norm = str => (str||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+  const normSub = str => norm(str).replace(/\s+/g,' ').trim();
+  const EXCLUIR_COBRADAS = ['portugues','ingles'];
+  // grafia canônica: junta variantes (acento/maiúscula/espaço) e usa a mais frequente do banco como rótulo
+  const grafias = {};
+  questoes.forEach(q => {
+    if (!q.submateria) return;
+    const nk = `${q.materia}|||${normSub(q.submateria)}`;
+    (grafias[nk] = grafias[nk] || {})[q.submateria] = (grafias[nk][q.submateria]||0)+1;
+  });
+  const canonSub = nk => {
+    const t = grafias[nk];
+    return t ? Object.entries(t).sort((a,b)=>b[1]-a[1])[0][0] : (nk.split('|||')[1] || '');
+  };
   qpool.forEach(q => {
     if (!q.submateria) return;
-    const key = `${q.materia}|||${q.submateria}`;
-    subCount[key] = (subCount[key] || 0) + 1;
+    if (EXCLUIR_COBRADAS.includes(norm(q.materia))) return;
+    const key = `${q.materia}|||${normSub(q.submateria)}`;
+    subBanco[key] = (subBanco[key] || 0) + 1;
+    if (answeredIds.has(q.id)) subFeitas[key] = (subFeitas[key] || 0) + 1;
   });
-  const topSubs = Object.entries(subCount).sort((a,b) => b[1]-a[1]).slice(0, 10);
+  const topSubs = Object.entries(subBanco).sort((a,b) => b[1]-a[1]).slice(0, 10);
   const maxSub = topSubs[0]?.[1] || 1;
-  document.getElementById('est-submateria-cobradas').innerHTML = topSubs.length ? topSubs.map(([key, n]) => {
-    const [m, s] = key.split('|||');
-    const pct = Math.round((n/maxSub)*100);
+  const legendaSub = '<div style="display:flex;gap:16px;font-size:11px;color:var(--muted);margin-bottom:12px">' +
+    '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--green);opacity:.22;vertical-align:middle;margin-right:5px"></span>no banco</span>' +
+    '<span><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:var(--green);vertical-align:middle;margin-right:5px"></span>já feitas</span>' +
+    '</div>';
+  document.getElementById('est-submateria-cobradas').innerHTML = topSubs.length ? legendaSub + topSubs.map(([key, n]) => {
+    const m = key.split('|||')[0];
+    const s = canonSub(key);
+    const feitas = subFeitas[key] || 0;
+    const cor = corMateria(m);
+    const bancoPct = Math.round((n/maxSub)*100);
+    const feitasPct = Math.round((feitas/maxSub)*100);
     return `<div class="chart-bar-row">
-      <div class="chart-bar-label" title="${m} · ${s}" style="color:${corMateria(m)}">${s}</div>
-      <div class="chart-bar-track">
-        <div class="chart-bar-fill" style="width:${pct}%;background:${corMateria(m)}">
-          ${pct > 12 ? n + ' questões' : ''}
-        </div>
+      <div class="chart-bar-label" title="${m} · ${s}" style="color:${cor}">${s}</div>
+      <div class="chart-bar-track" style="position:relative">
+        <div style="position:absolute;left:0;top:0;height:100%;width:${bancoPct}%;background:${cor};opacity:.22;border-radius:4px"></div>
+        <div class="chart-bar-fill" style="position:absolute;left:0;top:0;width:${feitasPct}%;background:${cor}">${feitasPct > 20 ? feitas + ' feitas' : ''}</div>
       </div>
-      <div class="chart-bar-pct" style="color:${corMateria(m)}">${n}q</div>
-      <div class="chart-bar-qty" style="color:${corMateria(m)};font-size:11px">${m}</div>
+      <div class="chart-bar-pct" style="color:${cor}">${feitas}/${n}</div>
+      <div class="chart-bar-qty" style="color:${cor};font-size:11px">${m}</div>
     </div>`;
   }).join('') : '<div style="color:var(--muted);font-size:14px">Nenhuma sub-matéria cadastrada ainda.</div>';
 
@@ -964,7 +988,7 @@ function renderEstatisticas() {
     totalPorChave[keyM] = (totalPorChave[keyM]||0)+1;
     if (!r.acertou) errosPorChave[keyM] = (errosPorChave[keyM]||0)+1;
     if (q.submateria) {
-      const keyS = `S|||${q.materia}|||${q.submateria}`;
+      const keyS = `S|||${q.materia}|||${normSub(q.submateria)}`;
       totalPorChave[keyS] = (totalPorChave[keyS]||0)+1;
       if (!r.acertou) errosPorChave[keyS] = (errosPorChave[keyS]||0)+1;
     }
@@ -979,7 +1003,8 @@ function renderEstatisticas() {
     const parts = x.key.split('|||');
     const tipo = parts[0];
     const m = parts[1];
-    const s = parts[2] || null;
+    const sNorm = parts[2] || null;
+    const s = sNorm ? canonSub(`${m}|||${sNorm}`) : null;
     const label = s ? `${s}` : `${m}`;
     const sublabel = s ? m : null;
     return `<div class="chart-bar-row">
