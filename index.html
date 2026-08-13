@@ -161,6 +161,15 @@
     nav { padding: 0 12px; gap: 2px; }
     .nav-btn { padding: 8px 10px; font-size: 13px; }
   }
+  /* seleção em lote no banco */
+  .sel-bar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; background:var(--bg2); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:14px; }
+  .sel-todas-label { display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; color:var(--muted); }
+  .sel-bar input[type=checkbox], .q-check { accent-color:var(--green); width:17px; height:17px; cursor:pointer; }
+  .q-check { margin-top:2px; flex-shrink:0; }
+  #sel-count { font-size:13px; color:var(--muted); }
+  .btn-apagar-sel { margin-left:auto; background:#3a1414; color:#ff6b6b; border:1px solid #5a1f1f; padding:8px 14px; border-radius:8px; font-family:inherit; font-weight:600; font-size:13px; cursor:pointer; }
+  .btn-apagar-sel:disabled { opacity:.45; cursor:default; }
+  .btn-apagar-sel:not(:disabled):hover { background:#4a1a1a; }
 </style>
 </head>
 <body>
@@ -656,12 +665,23 @@ async function salvarQuestao() {
 function renderQuestoes() {
   const list = document.getElementById('questions-list');
   document.getElementById('total-questoes').textContent = questoes.length;
+  selecionadas = new Set();
   if (!questoes.length) {
     list.innerHTML = '<div class="empty-state"><h3>Nenhuma questão ainda</h3><p>Cadastre a primeira questão acima.</p></div>';
     return;
   }
-  list.innerHTML = questoes.map((q, i) => `
+  const barra = `
+    <div class="sel-bar">
+      <label class="sel-todas-label">
+        <input type="checkbox" id="sel-todas" onclick="alternarTodas(this.checked)">
+        Selecionar todas
+      </label>
+      <span id="sel-count">Nenhuma selecionada</span>
+      <button id="btn-apagar-sel" class="btn-apagar-sel" onclick="apagarSelecionadas()" disabled>🗑️ Apagar selecionadas</button>
+    </div>`;
+  list.innerHTML = barra + questoes.map((q, i) => `
     <div class="question-item">
+      <input type="checkbox" class="q-check" onclick="toggleSelecao('${q.id}', this.checked)">
       <div class="question-num">${i+1}</div>
       <div class="question-content">
         <div class="question-meta">
@@ -679,6 +699,7 @@ function renderQuestoes() {
       </div>
     </div>
   `).join('');
+  atualizarBarraSelecao();
 }
 
 function toggleApoio(id) {
@@ -693,6 +714,57 @@ async function excluirQuestao(id) {
   await sb.from('questoes').delete().eq('id', id);
   toast('Questão excluída');
   await carregarDados();
+}
+
+// SELEÇÃO EM LOTE
+let selecionadas = new Set();
+
+function toggleSelecao(id, marcado) {
+  id = String(id);
+  if (marcado) selecionadas.add(id); else selecionadas.delete(id);
+  atualizarBarraSelecao();
+}
+
+function alternarTodas(marcar) {
+  selecionadas = new Set();
+  if (marcar) questoes.forEach(q => selecionadas.add(String(q.id)));
+  document.querySelectorAll('.q-check').forEach(cb => cb.checked = marcar);
+  atualizarBarraSelecao();
+}
+
+function atualizarBarraSelecao() {
+  const n = selecionadas.size;
+  const cnt = document.getElementById('sel-count');
+  const btn = document.getElementById('btn-apagar-sel');
+  const todas = document.getElementById('sel-todas');
+  if (cnt) cnt.textContent = n === 0 ? 'Nenhuma selecionada' : (n === 1 ? '1 selecionada' : n + ' selecionadas');
+  if (btn) btn.disabled = n === 0;
+  if (todas) todas.checked = n > 0 && n === questoes.length;
+}
+
+async function apagarSelecionadas() {
+  const ids = [...selecionadas];
+  if (!ids.length) return;
+  const rotulo = ids.length === 1 ? 'esta 1 questão' : `estas ${ids.length} questões`;
+  if (!confirm(`Apagar ${rotulo}? Isso também remove as respostas ligadas a elas e NÃO tem como desfazer.`)) return;
+  const btn = document.getElementById('btn-apagar-sel');
+  if (btn) { btn.disabled = true; btn.textContent = 'Apagando…'; }
+  const idsNum = ids.map(x => isNaN(x) ? x : Number(x));
+  const LOTE = 100;
+  try {
+    for (let i = 0; i < idsNum.length; i += LOTE) {
+      const lote = idsNum.slice(i, i + LOTE);
+      await sb.from('respostas').delete().in('questao_id', lote);
+      const { error } = await sb.from('questoes').delete().in('id', lote);
+      if (error) throw error;
+    }
+    selecionadas = new Set();
+    toast(`${ids.length === 1 ? '1 questão apagada' : ids.length + ' questões apagadas'}`);
+    await carregarDados();
+  } catch (e) {
+    alert('Erro ao apagar: ' + (e.message || e));
+    if (btn) { btn.disabled = false; btn.textContent = '🗑️ Apagar selecionadas'; }
+  }
 }
 
 // EDITAR MODAL
