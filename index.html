@@ -460,11 +460,26 @@ async function criarTabelaSeNecessario() {
   }
 }
 
+async function buscarTodos(tabela, coluna, ascendente) {
+  // A API do Supabase devolve no máximo 1000 linhas por requisição.
+  // Aqui buscamos em páginas de 1000 até trazer tudo.
+  const PAGINA = 1000;
+  let todos = [], de = 0;
+  while (true) {
+    const { data, error } = await sb.from(tabela).select('*')
+      .order(coluna, { ascending: ascendente })
+      .range(de, de + PAGINA - 1);
+    if (error) { console.error('Erro ao carregar ' + tabela + ':', error); break; }
+    todos = todos.concat(data || []);
+    if (!data || data.length < PAGINA) break; // última página
+    de += PAGINA;
+  }
+  return todos;
+}
+
 async function carregarDados() {
-  const { data: q } = await sb.from('questoes').select('*').order('created_at', { ascending: true });
-  const { data: r } = await sb.from('respostas').select('*').order('respondida_em', { ascending: false });
-  questoes = q || [];
-  respostas = r || [];
+  questoes = await buscarTodos('questoes', 'created_at', true);
+  respostas = await buscarTodos('respostas', 'respondida_em', false);
   renderQuestoes();
   renderHome();
   renderRevisao();
